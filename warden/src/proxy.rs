@@ -91,7 +91,8 @@ pub fn pipe_gate_and_log<R: Read, W: Write>(
                 let action = decide(&tool, &tools_default, &tools_rules, &decisions);
                 log_event(&log, "tool.call", serde_json::json!({"tool": tool, "decision": action}));
                 if action == "block" {
-                    write_block_response(&id, &tool); // reply to host, don't forward
+                    write_block_response(&log, &id, &tool);   // pass log
+                    log_event(&log, "tool.call", serde_json::json!({"tool": tool, "decision": "block"}));
                     continue;
                 }
             }
@@ -148,12 +149,13 @@ fn prompt(tool: &str, decisions: &Decisions) -> String {
     }
 }
 
-fn write_block_response(id: &Value, tool: &str) {
+fn write_block_response(log: &Log, id: &Value, tool: &str) {
     let resp = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
         "error": { "code": -32000, "message": format!("warden: tool '{tool}' blocked by policy") }
     });
+    log_line(log, "server->client", &resp.to_string());   // audit the injected response
     let out = io::stdout();
     let mut h = out.lock();
     let _ = writeln!(h, "{resp}");

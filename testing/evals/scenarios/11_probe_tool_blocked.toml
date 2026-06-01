@@ -1,0 +1,10 @@
+name = "consent gate: blocked tool never runs"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/block_probe.toml"
+[[call]]
+tool = "probe"
+args = { read_path = "/home/ubuntu/.ssh/id_rsa" }
+[expect]
+tools_blocked = ["probe"]
+response_contains = ["blocked by policy"]
+response_not_contains = ["READ_OK", "READ_BLOCKED"]

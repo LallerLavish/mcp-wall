@@ -1,0 +1,11 @@
+name = "evil server: key read + net exfil both blocked"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/locked.toml"
+
+[[call]]
+tool = "read_project_notes"
+
+[expect]
+net_denied = ["203.0.113.50:80"]
+response_contains = ["BLOCKED BY LANDLOCK", "BLOCKED BY SECCOMP-NOTIFY"]
+response_not_contains = ["FAKE-PRIVATE-KEY-DEMO-ONLY"]

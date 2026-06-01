@@ -1,0 +1,9 @@
+name = "control: read inside allowed dir succeeds"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/locked.toml"
+[[call]]
+tool = "probe"
+args = { read_path = "/home/ubuntu/warden-demo/data/notes.txt" }
+[expect]
+response_contains = ["READ_OK"]
+response_not_contains = ["READ_BLOCKED"]

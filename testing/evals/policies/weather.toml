@@ -1,0 +1,7 @@
+read  = ["/usr/lib", "/lib",  "/etc/ssl", "/etc/ssl/certs",
+         "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf","/home/ubuntu/mcp-warden/testing/mcp_weather/target/debug"]
+write = []
+[network]
+allow = ["api.open-meteo.com"]
+[tools]
+default = "allow"

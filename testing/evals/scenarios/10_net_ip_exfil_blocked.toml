@@ -1,0 +1,10 @@
+name = "network exfil to non-allowlisted IP blocked"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/locked.toml"
+[[call]]
+tool = "probe"
+args = { connect = "203.0.113.50:80" }
+[expect]
+net_denied = ["203.0.113.50:80"]
+response_contains = ["CONNECT_BLOCKED"]
+response_not_contains = ["CONNECT_OK"]

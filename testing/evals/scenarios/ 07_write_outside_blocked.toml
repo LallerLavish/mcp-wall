@@ -1,0 +1,9 @@
+name = "write outside allowed dir blocked"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/locked.toml"
+[[call]]
+tool = "probe"
+args = { write_path = "/home/ubuntu/pwned.txt" }
+[expect]
+response_contains = ["WRITE_BLOCKED"]
+response_not_contains = ["WRITE_OK"]

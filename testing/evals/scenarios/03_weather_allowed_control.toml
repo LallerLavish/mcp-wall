@@ -1,0 +1,10 @@
+name = "control: legit network server works inside the sandbox"
+server = ["./testing/mcp_weather/target/debug/mcp_weather"]
+policy = "testing/evals/policies/weather.toml"
+
+[[call]]
+tool = "get_weather"
+args = { latitude = 28.6, longitude = 77.2 }
+
+[expect]
+response_contains = ["wind"]

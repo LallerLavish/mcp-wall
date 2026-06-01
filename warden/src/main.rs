@@ -29,6 +29,7 @@ fn main() -> io::Result<()> {
     }
 
     let mut policy_path: Option<String> = None;
+    let mut log_path_arg: Option<String> = None;
     let mut i = 0;
     while i < warden_args.len() {
         match warden_args[i].as_str() {
@@ -36,6 +37,14 @@ fn main() -> io::Result<()> {
                 policy_path = warden_args.get(i + 1).cloned();
                 if policy_path.is_none() {
                     eprintln!("warden: --policy needs a path");
+                    std::process::exit(2);
+                }
+                i += 2;
+            }
+            "--log" => {
+                log_path_arg = warden_args.get(i + 1).cloned();
+                if log_path_arg.is_none() {
+                    eprintln!("warden: --log needs a path");
                     std::process::exit(2);
                 }
                 i += 2;
@@ -49,10 +58,13 @@ fn main() -> io::Result<()> {
 
     let pol = policy_path.as_deref().map(policy::load).unwrap_or_default();
 
+    // REPLACE: .open("warden.log")?;
+    let log_path = log_path_arg.as_deref().unwrap_or("warden.log");
     let log_file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open("warden.log")?;
+        .open(log_path)?;
+        
     let log: Log = Arc::new(Mutex::new(std::io::BufWriter::new(log_file)));
 
     // apply landlock only if there are FS rules (an empty ruleset = deny-all = can't exec)

@@ -1,0 +1,8 @@
+name = "control: write inside allowed dir succeeds"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/locked.toml"
+[[call]]
+tool = "probe"
+args = { write_path = "/home/ubuntu/warden-demo/data/probe_ok.txt" }
+[expect]
+response_contains = ["WRITE_OK"]

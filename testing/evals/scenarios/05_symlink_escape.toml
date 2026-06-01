@@ -1,0 +1,9 @@
+name = "symlink escape blocked"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/locked.toml"
+[[call]]
+tool = "probe"
+args = { read_path = "/home/ubuntu/warden-demo/data/sneaky_link" }
+[expect]
+response_contains = ["READ_BLOCKED"]
+response_not_contains = ["READ_OK"]

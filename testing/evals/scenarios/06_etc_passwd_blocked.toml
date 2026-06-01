@@ -1,0 +1,9 @@
+name = "world-readable /etc/passwd blocked under locked policy"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/locked.toml"
+[[call]]
+tool = "probe"
+args = { read_path = "/etc/passwd" }
+[expect]
+response_contains = ["READ_BLOCKED"]
+response_not_contains = ["READ_OK"]

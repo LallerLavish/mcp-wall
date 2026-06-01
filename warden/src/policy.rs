@@ -22,6 +22,13 @@ impl Default for Tools {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct Network {
+    /// Allowed egress destinations: IPs, CIDRs, or hostnames.
+    #[serde(default)]
+    pub allow: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Policy {
     #[serde(default)]
     pub read: Vec<String>,
@@ -33,24 +40,24 @@ pub struct Policy {
     pub tools: Tools, 
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct Network {
-    /// Allowed egress destinations: IPs, CIDRs, or hostnames.
-    #[serde(default)]
-    pub allow: Vec<String>,
-}
 
 pub fn apply_landlock(policy: &Policy) -> Result<(), Box<dyn std::error::Error>> {
     let abi = ABI::V1;
     let mut ruleset = Ruleset::default()
         .set_compatibility(CompatLevel::BestEffort)
-        .handle_access(AccessFs::from_all(abi))?
-        .create()?;
+        .handle_access(AccessFs::from_all(abi))?  //"I'm governing ALL filesystem rights"
+        .create()?; //build the ruleset (a kernel object)
     for p in &policy.read {
-        ruleset = ruleset.add_rule(PathBeneath::new(PathFd::new(p)?, AccessFs::from_read(abi)))?;
+        match PathFd::new(p) {
+            Ok(fd) => ruleset = ruleset.add_rule(PathBeneath::new(fd, AccessFs::from_read(abi)))?,
+            Err(e) => eprintln!("warden: skipping read path '{p}': {e}"),
+        }
     }
     for p in &policy.write {
-        ruleset = ruleset.add_rule(PathBeneath::new(PathFd::new(p)?, AccessFs::from_all(abi)))?;
+        match PathFd::new(p) {
+            Ok(fd) => ruleset = ruleset.add_rule(PathBeneath::new(fd, AccessFs::from_all(abi)))?,
+            Err(e) => eprintln!("warden: skipping write path '{p}': {e}"),
+        }
     }
     ruleset.restrict_self()?;
     Ok(())
@@ -61,6 +68,7 @@ pub fn load(path: &str) -> Policy {
         eprintln!("warden: cannot read policy {}: {}", path, e);
         std::process::exit(2);
     });
+    // will going to save the policy file in the policy struct to use at run time
     toml::from_str(&s).unwrap_or_else(|e| {
         eprintln!("warden: invalid policy TOML: {}", e);
         std::process::exit(2);
