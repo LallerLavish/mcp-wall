@@ -1,0 +1,8 @@
+name = "dlp: server-returned AWS key + private key are redacted"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/dlp.toml"
+[[call]]
+tool = "dump_config"
+[expect]
+response_contains = ["<AWS-KEY-REDACTED>","<PRIVATE-KEY-REDACTED>"]
+response_not_contains = ["AKIAIOSFODNN7EXAMPLE","BEGIN OPENSSH PRIVATE KEY"]

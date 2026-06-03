@@ -11,7 +11,7 @@ const BLD: &str = "\x1b[1m";
 const RST: &str = "\x1b[0m";
 
 fn hhmmss(ts: &str) -> &str {
-    ts.get(11..19).unwrap_or(ts) // 2026-05-30T10:08:20.39... -> 10:08:20
+    ts.get(11..19).unwrap_or(ts)
 }
 
 fn main() {

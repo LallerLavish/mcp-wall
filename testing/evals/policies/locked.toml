@@ -1,9 +1,8 @@
-# locked.toml
 read  = ["/usr/lib", "/lib",
          "/home/ubuntu/warden-demo/data",
          "/home/ubuntu/mcp-warden/testing/mcp_evil/target/debug"]
 write = ["/home/ubuntu/warden-demo/data"]
 [network]
-allow = ["127.0.0.1"]      # non-empty -> seccomp active
+allow = ["127.0.0.1"]      
 [tools]
 default = "allow"

@@ -1,0 +1,9 @@
+read = ["/usr/lib","/lib","/home/ubuntu/mcp-warden/testing/mcp_evil/target/debug"]
+write = []
+[network]
+allow = ["127.0.0.1"]
+[tools]
+default = "allow"
+[dlp]
+enabled = true
+builtins = ["aws_key","private_key","jwt","github_pat"]

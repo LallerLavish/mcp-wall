@@ -4,14 +4,15 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use serde_json::Value;
+use crate::dlp::Dlp;
 
 use crate::log::{log_event,log_line, Log};
-
 pub fn pipe_and_log<R: Read, W: Write>(
     src: R,
     mut dst: W,
     direction_tag: &'static str,
     log: Log,
+    dlp: Arc<Dlp>,
 ) -> io::Result<()> {
     let mut reader = BufReader::new(src);
     let mut line = String::new();
@@ -20,8 +21,42 @@ pub fn pipe_and_log<R: Read, W: Write>(
         if reader.read_line(&mut line)? == 0 {
             break;
         }
-        log_line(&log, direction_tag, &line);
-        if let Err(e) = dst.write_all(line.as_bytes()) {
+
+        // v2.5 DLP — scan/redact/block on the egress path before it leaves. lallerlavish
+        let out: String = if !dlp.enabled {
+            line.clone()
+        } else if let Ok(mut msg) = serde_json::from_str::<Value>(line.trim_end()) {
+            let hits = dlp.scan(&mut msg);
+            for h in &hits {
+                log_event(&log, "dlp", serde_json::json!({
+                    "direction": direction_tag, "rule": h.rule,
+                    "action": if h.block { "block" } else { "redact" }, "count": h.count,
+                }));
+            }
+            if hits.iter().any(|h| h.block) {
+                format!("{}\n", crate::dlp::block_response(&msg))
+            } else if hits.is_empty() {
+                line.clone()
+            } else {
+                format!("{msg}\n")
+            }
+        } else {
+            let mut raw = line.clone();
+            let hits = dlp.scan_raw(&mut raw);
+            for h in &hits {
+                log_event(&log, "dlp", serde_json::json!({
+                    "direction": direction_tag, "rule": h.rule,
+                    "action": if h.block { "block" } else { "redact" }, "count": h.count,
+                }));
+            }
+            if hits.iter().any(|h| h.block) { String::new() } else { raw }
+        };
+
+        if out.is_empty() {
+            continue; // blocked — emit nothing downstream lallerlavish
+        }
+        log_line(&log, direction_tag, &out); // log the forwarded (redacted) line lallerlavish
+        if let Err(e) = dst.write_all(out.as_bytes()) {
             if e.kind() == io::ErrorKind::BrokenPipe {
                 break;
             }
@@ -42,7 +77,7 @@ pub struct DecisionStore {
 }
 
 impl DecisionStore {
-    /// Load persisted "always" decisions from the sidecar (if it exists).
+    // Load persisted "always" decisions from the sidecar (if it exists). lallerlavish
     pub fn load(path: Option<PathBuf>) -> Decisions {
         let map = path
             .as_ref()
@@ -54,7 +89,7 @@ impl DecisionStore {
     fn get(&self, tool: &str) -> Option<String> {
         self.map.lock().unwrap().get(tool).cloned()
     }
-    /// Record an "always" decision and flush the whole map to the sidecar.
+    // Record an "always" decision and flush the whole map to the sidecar. lallerlavish
     fn remember(&self, tool: &str, action: &str) {
         let mut m = self.map.lock().unwrap();
         m.insert(tool.to_string(), action.to_string());
@@ -83,7 +118,7 @@ pub fn pipe_gate_and_log<R: Read, W: Write>(
         }
         log_line(&log, "client->server", &line);
 
-        // gate tools/call before forwarding
+        // gate tools/call before forwarding lallerlavish
         if let Ok(v) = serde_json::from_str::<Value>(line.trim_end()) {
             if v.get("method").and_then(|m| m.as_str()) == Some("tools/call") {
                 let tool = v["params"]["name"].as_str().unwrap_or("").to_string();
@@ -127,7 +162,7 @@ fn decide(
 }
 
 fn prompt(tool: &str, decisions: &Decisions) -> String {
-    // controlling terminal, NOT the MCP pipe — so the prompt never corrupts stdout
+    // controlling terminal, NOT the MCP pipe — so the prompt never corrupts stdout lallerlavish
     let Ok(mut tty) = OpenOptions::new().read(true).write(true).open("/dev/tty") else {
         eprintln!("[warden] no tty; auto-allowing '{tool}' (set default=\"block\" for strict)");
         return "allow".into();
@@ -145,7 +180,7 @@ fn prompt(tool: &str, decisions: &Decisions) -> String {
         "a" => "allow".into(),
         "A" => { decisions.remember(tool, "allow"); "allow".into() }
         "B" => { decisions.remember(tool, "block"); "block".into() }
-        _ => "block".into(), // "b" or anything else = block this one
+        _ => "block".into(), // "b" or anything else = block this one lallerlavish
     }
 }
 
@@ -155,7 +190,7 @@ fn write_block_response(log: &Log, id: &Value, tool: &str) {
         "id": id,
         "error": { "code": -32000, "message": format!("warden: tool '{tool}' blocked by policy") }
     });
-    log_line(log, "server->client", &resp.to_string());   // audit the injected response
+    log_line(log, "server->client", &resp.to_string());   // audit the injected response lallerlavish
     let out = io::stdout();
     let mut h = out.lock();
     let _ = writeln!(h, "{resp}");

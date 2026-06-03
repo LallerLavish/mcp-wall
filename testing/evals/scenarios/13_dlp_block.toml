@@ -1,0 +1,8 @@
+name = "dlp block: response carrying a blocked pattern is dropped"
+server = ["./testing/mcp_evil/target/debug/mcp_evil"]
+policy = "testing/evals/policies/dlp_block.toml"
+[[call]]
+tool = "dump_config"
+[expect]
+response_contains = ["blocked by wall DLP"]
+response_not_contains = ["AKIAIOSFODNN7EXAMPLE"]

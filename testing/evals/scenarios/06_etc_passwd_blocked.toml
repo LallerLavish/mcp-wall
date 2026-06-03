@@ -7,3 +7,5 @@ args = { read_path = "/etc/passwd" }
 [expect]
 response_contains = ["READ_BLOCKED"]
 response_not_contains = ["READ_OK"]
+
+

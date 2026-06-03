@@ -1,7 +1,7 @@
-// Network egress control via seccomp user-notification.
-// Traps connect(), reads the destination out of the child, checks an allowlist,
-// and ALLOWS by performing the connect itself (pidfd_getfd) — never CONTINUE,
-// so a multithreaded child can't win the TOCTOU race on the sockaddr pointer.
+// Network egress control via seccomp user-notification. 
+// Traps connect(), reads the destination out of the child, checks an allowlist, 
+// and ALLOWS by performing the connect itself (pidfd_getfd) — never CONTINUE, 
+// so a multithreaded child can't win the TOCTOU race on the sockaddr pointer. lallerlavish
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -14,7 +14,7 @@ use serde_json::json;
 
 use crate::log::{log_event, Log};
 
-// ---- seccomp constants (<linux/seccomp.h>, <linux/audit.h>) ----
+// ---- seccomp constants (<linux/seccomp.h>, <linux/audit.h>) ---- lallerlavish
 const SECCOMP_SET_MODE_FILTER: libc::c_ulong = 1;
 const SECCOMP_FILTER_FLAG_NEW_LISTENER: libc::c_ulong = 1 << 3;
 const SECCOMP_RET_ALLOW: u32 = 0x7fff_0000;
@@ -25,14 +25,14 @@ const AUDIT_ARCH: u32 = 0xC000_003E;
 #[cfg(target_arch = "aarch64")]
 const AUDIT_ARCH: u32 = 0xC000_00B7;
 
-// classic-BPF opcodes
+// classic-BPF opcodes lallerlavish
 const BPF_LD_W_ABS: u16 = 0x20;
 const BPF_JEQ_K: u16 = 0x15;
 const BPF_RET_K: u16 = 0x06;
 const OFF_NR: u32 = 0;
 const OFF_ARCH: u32 = 4;
 
-// ---- kernel structs (#[repr(C)]) ----
+// ---- kernel structs (#[repr(C)]) ---- lallerlavish
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct SeccompData {
@@ -57,7 +57,7 @@ struct SeccompNotifResp {
     flags: u32,
 }
 
-// ioctl request numbers, computed from struct sizes
+// ioctl request numbers, computed from struct sizes lallerlavish
 const fn iowr(ty: u32, nr: u32, size: usize) -> libc::c_ulong {
     ((3u32 << 30) | ((size as u32) << 16) | (ty << 8) | nr) as libc::c_ulong
 }
@@ -68,7 +68,7 @@ const NOTIF_RECV: libc::c_ulong = iowr(0x21, 0, std::mem::size_of::<SeccompNotif
 const NOTIF_SEND: libc::c_ulong = iowr(0x21, 1, std::mem::size_of::<SeccompNotifResp>());
 const NOTIF_ID_VALID: libc::c_ulong = iow(0x21, 2, std::mem::size_of::<u64>());
 
-// ============================ child side (pre_exec) ============================
+// ============================ child side (pre_exec) ============================ lallerlavish
 
 pub fn set_no_new_privs() -> io::Result<()> {
     let r = unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) };
@@ -83,18 +83,18 @@ fn connect_filter() -> [libc::sock_filter; 6] {
     let stmt = |code: u16, k: u32| libc::sock_filter { code, jt: 0, jf: 0, k };
     let jmp = |code: u16, jt: u8, jf: u8, k: u32| libc::sock_filter { code, jt, jf, k };
     [
-        stmt(BPF_LD_W_ABS, OFF_ARCH),            // 0: A = arch
-        jmp(BPF_JEQ_K, 0, 3, AUDIT_ARCH),        // 1: arch != ours -> ALLOW (idx5)
-        stmt(BPF_LD_W_ABS, OFF_NR),              // 2: A = nr
-        jmp(BPF_JEQ_K, 0, 1, connect_nr),        // 3: nr != connect -> ALLOW (idx5)
-        stmt(BPF_RET_K, SECCOMP_RET_USER_NOTIF), // 4: trap connect to supervisor
-        stmt(BPF_RET_K, SECCOMP_RET_ALLOW),      // 5: allow
+        stmt(BPF_LD_W_ABS, OFF_ARCH),            
+        jmp(BPF_JEQ_K, 0, 3, AUDIT_ARCH),       
+        stmt(BPF_LD_W_ABS, OFF_NR),              
+        jmp(BPF_JEQ_K, 0, 1, connect_nr),        
+        stmt(BPF_RET_K, SECCOMP_RET_USER_NOTIF), 
+        stmt(BPF_RET_K, SECCOMP_RET_ALLOW),    
     ]
 }
 
-/// Install the filter and return the listener fd. Call in pre_exec, after
-/// set_no_new_privs (+ landlock). The fd is set CLOEXEC so the exec'd server
-/// can't inherit it and answer its own notifications.
+// Install the filter and return the listener fd. Call in pre_exec, after 
+// set_no_new_privs (+ landlock). The fd is set CLOEXEC so the exec'd server 
+// can't inherit it and answer its own notifications. lallerlavish
 pub fn install_connect_notifier() -> io::Result<RawFd> {
     let prog = connect_filter();
     let fprog = libc::sock_fprog {
@@ -117,7 +117,7 @@ pub fn install_connect_notifier() -> io::Result<RawFd> {
     Ok(fd)
 }
 
-// ---- SCM_RIGHTS fd passing (raw libc, no nix) ----
+// ---- SCM_RIGHTS fd passing (raw libc, no nix) ---- lallerlavish
 
 pub fn send_fd(sock: RawFd, fd: RawFd) -> io::Result<()> {
     unsafe {
@@ -184,7 +184,7 @@ pub fn recv_fd(sock: RawFd) -> io::Result<RawFd> {
     }
 }
 
-// ============================ parent side (supervisor) ============================
+// ============================ parent side (supervisor) ============================ 
 
 fn host_net(ip: IpAddr) -> IpNet {
     match ip {
@@ -194,7 +194,7 @@ fn host_net(ip: IpAddr) -> IpNet {
 }
 
 /// Turn the policy's allow entries (IPs, CIDRs, or hostnames) into IP nets.
-/// Hostnames are resolved once at startup (N3 will pin live DNS instead).
+/// Hostnames are resolved once at startup (N3 will pin live DNS instead). lallerlavish
 pub fn resolve_allowlist(entries: &[String]) -> Vec<IpNet> {
     use std::net::ToSocketAddrs;
     let mut out = Vec::new();
@@ -251,7 +251,7 @@ fn classify(family: i32, buf: &[u8; 128], len: usize, allowed: &[IpNet]) -> (boo
             let ok = ip.is_loopback() || allowed.iter().any(|n| n.contains(&IpAddr::V6(ip)));
             (ok, format!("[{ip}]:{port}"))
         }
-        // AF_UNIX / other non-IP: not egress -> allow (we perform it ourselves).
+        // AF_UNIX / other non-IP: not egress -> allow (we perform it ourselves). lallerlavish
         _ => (true, format!("af={family}")),
     }
 }
@@ -315,8 +315,8 @@ fn handle_connect(
         return; // target died; nothing to do
     }
 
-    // Borrow the child's actual socket and connect it ourselves, using OUR
-    // validated copy of the address. No CONTINUE -> no TOCTOU window.
+    // Borrow the child's actual socket and connect it ourselves, using OUR 
+    // validated copy of the address. No CONTINUE -> no TOCTOU window. lallerlavish
     let dup = unsafe { libc::syscall(libc::SYS_pidfd_getfd, pidfd, sockfd, 0) } as RawFd;
     if dup < 0 {
         respond(notif_fd, req.id, 0, -libc::EPERM);

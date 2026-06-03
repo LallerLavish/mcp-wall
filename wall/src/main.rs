@@ -2,6 +2,7 @@ mod log;
 mod policy;
 mod proxy;
 mod seccomp;
+mod dlp;
 
 use std::fs::OpenOptions;
 use std::io;
@@ -58,7 +59,7 @@ fn main() -> io::Result<()> {
 
     let pol = policy_path.as_deref().map(policy::load).unwrap_or_default();
 
-    // REPLACE: .open("warden.log")?;
+    // REPLACE: .open("warden.log")?; lallerlavish
     let log_path = log_path_arg.as_deref().unwrap_or("warden.log");
     let log_file = OpenOptions::new()
         .create(true)
@@ -67,11 +68,11 @@ fn main() -> io::Result<()> {
         
     let log: Log = Arc::new(Mutex::new(std::io::BufWriter::new(log_file)));
 
-    // apply landlock only if there are FS rules (an empty ruleset = deny-all = can't exec)
+    // apply landlock only if there are FS rules (an empty ruleset = deny-all = can't exec) lallerlavish
     let want_landlock = !pol.read.is_empty() || !pol.write.is_empty();
     let want_net = !pol.network.allow.is_empty();
 
-    // socketpair carries the seccomp listener fd from child -> parent
+    // socketpair carries the seccomp listener fd from child -> parent lallerlavish
     let net_socks = if want_net { Some(UnixStream::pair()?) } else { None };
     let child_fd: Option<i32> = net_socks.as_ref().map(|(_, c)| c.as_raw_fd());
 
@@ -102,7 +103,7 @@ fn main() -> io::Result<()> {
     let mut child = cmd.spawn()?;
     let child_pid = child.id() as i32;
 
-    // bring up the egress supervisor BEFORE relaying, so early connects are policed
+    // bring up the egress supervisor before relaying, so early connects are policed lallerlavish
     if want_net {
         let (parent_sock, child_sock) = net_socks.unwrap();
         drop(child_sock); // parent keeps only its end
@@ -129,9 +130,10 @@ fn main() -> io::Result<()> {
     let tools_default = pol.tools.default.clone();
     let tools_rules = pol.tools.rules.clone();
 
+    let dlp = std::sync::Arc::new(dlp::Dlp::from_policy(&pol));
+
     let t_in = thread::spawn(move || {proxy::pipe_gate_and_log(io::stdin(), child_stdin, log_in, tools_default, tools_rules, decisions)});
-    let t_out = thread::spawn(move || pipe_and_log(child_stdout, io::stdout(), "server->client", log_out));
-    
+    let t_out = thread::spawn(move || pipe_and_log(child_stdout, io::stdout(), "server->client", log_out, dlp));
     let status = child.wait()?;
     if let Err(e) = t_in.join().expect("stdin thread panicked") {
         eprintln!("warden: stdin relay error: {}", e);
