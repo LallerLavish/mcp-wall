@@ -7,7 +7,6 @@ bin
 inspector-config.json
 */target
 *.log
-*.md
 *.env
 *.json
 *.decisions.json
